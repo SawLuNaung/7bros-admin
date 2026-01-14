@@ -1,14 +1,11 @@
 import { ColumnDef } from "@tanstack/react-table";
-import InactiveBadge from "../common/InactiveBadge";
 import { useBoolean } from "usehooks-ts";
 import { cn, getRelativeTime } from "../../lib/utils";
-import ActiveBadge from "../common/ActiveBadge";
 import { useState } from "react";
 import CellAction from "../common/CellAction";
 import { DeleteConfirm } from "../common/DeleteConfirmation";
 import EmployeeModal from "../common/Modal";
 import { UserForm } from "./user-form";
-import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { useMutation } from "@apollo/client";
 import {
   DELETE_DRIVER_BY_ID,
@@ -21,15 +18,18 @@ import { Switch } from "../ui/switch";
 
 export type Section = {
   __typename: string;
+  id: string;
   name: string;
   address: string;
   profile_picture_url: string;
   balance: number;
   birth_date: null;
   created_at: string;
-  disabled: false;
+  disabled: boolean;
   driver_id: string;
   verified: boolean;
+  driving_license_number?: string | null;
+  vehicle_model?: string | null;
 };
 
 export const columns: ColumnDef<Section>[] = [

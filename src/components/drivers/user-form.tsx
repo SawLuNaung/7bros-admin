@@ -25,7 +25,7 @@ const formContainer =
 export const UserForm: React.FC<UserFormType> = ({
   editData,
   toggle,
-  editMode,
+  editMode: _editMode,
 }) => {
   const [updateService, { loading }] = useMutation(UPDATE_DRIVER_BY_ID, {
     refetchQueries: [GET_ALL_DRIVERS],
