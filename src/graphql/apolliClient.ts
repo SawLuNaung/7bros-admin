@@ -4,7 +4,7 @@ import authStorage from "../lib/authStorage";
 import { onError } from "@apollo/client/link/error";
 
 const httpLink = createHttpLink({
-  uri: "https://api.eaxi.axra.app/v1/graphql",
+  uri: "https://eaxi.axra.app/v1/graphql",
 });
 
 const errorLink = onError(({ graphQLErrors, networkError }) => {
