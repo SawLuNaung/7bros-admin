@@ -1,7 +1,7 @@
 import { Button } from "./ui/button";
 import { useState } from "react";
 import { cn } from "../lib/utils";
-import LOGO from "../assets/logo.png";
+import LOGO from "../assets/7brothers_logo.jpg";
 import { Separator } from "../components/ui/separator";
 import useMenus from "../lib/UseMenus";
 import { LogOut, Menu, Settings, X } from "lucide-react";
@@ -44,7 +44,7 @@ export const SideBar = () => {
 
         </Button>
         {
-            open && <p className=" italic font-semibold text-sm">EAXI</p>
+            open && <p className=" italic font-semibold text-sm">7Brothers</p>
         }
       </div>
       <Separator />

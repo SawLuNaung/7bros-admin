@@ -2,7 +2,7 @@ import {Button} from "../ui/button";
 import {Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle,} from "../ui/card";
 import {Input} from "../ui/input";
 import {Label} from "../ui/label";
-import LOGO from "../../assets/logo.png";
+import LOGO from "../../assets/7brothers_logo.jpg";
 import PasswordInput from "../password-input";
 import {useEffect, useState} from "react";
 import {useNavigate} from "react-router-dom";
@@ -83,7 +83,7 @@ export function CardWithForm() {
                     <img className=" mx-auto h-[50px]" src={LOGO}></img>
                 </CardTitle>
                 <CardDescription className="text-center">
-                    Welcome to EAXI Admin
+                    Welcome to 7Brothers Admin
                 </CardDescription>
             </CardHeader>
             <CardContent>
@@ -113,7 +113,7 @@ export function CardWithForm() {
             <CardFooter className="flex flex-col justify-between">
                 <Button onClick={handleLogin} className="w-full">Login</Button>
                 <p className="text-xs md:text-md my-[20px] text-gray-400">
-                    Copyright © {new Date().getFullYear()} EAXI. All right reserved.
+                    Copyright © {new Date().getFullYear()} 7Brothers. All right reserved.
                 </p>
             </CardFooter>
         </Card>
