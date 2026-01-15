@@ -21,9 +21,13 @@ export const SideBar = () => {
   const MENUS = useMenus();
 
   const handleLogOut = () => {
+    // Clear all authentication data
     window.localStorage.removeItem("token");
-    window.localStorage.removeItem("admin_role"); // Also remove role
-    navigate("/"); // This will now work correctly
+    window.localStorage.removeItem("admin_role");
+    window.localStorage.removeItem("login");
+    
+    // Navigate to login page
+    navigate("/", { replace: true });
   };
 
   return (
@@ -148,13 +152,13 @@ export const SideBar = () => {
               ) : null}
             </Button>
             <Button
+              onClick={handleLogOut}
               className=" rounded-md border-none drop-shadow-none p-0 w-full  h-[30px]  shadow-none bg-gray-50 flex justify-start  gap-4 "
               type="button"
               variant={"outline"}
               id={`logout`}
             >
               <LogOut
-                onClick={handleLogOut}
                 className=" ml-3 text-gray-400 w-[20px] "
               />
               {open && <p className="text-gray-500">Log Out</p>}
