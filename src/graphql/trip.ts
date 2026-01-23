@@ -8,6 +8,8 @@ export const GET_ALL_TRIPS = gql`
       commission_rate
       commission_rate_type
       created_at
+      started_at
+      ended_at
       distance_fee
       distance_fee_per_km
       driver_received_amount
@@ -44,6 +46,8 @@ export const GET_TRIP_BY_ID = gql`
       waiting_time_sec
       waiting_fee_per_minute
       created_at
+      started_at
+      ended_at
       distance_km
       extra_fee
       driver_id

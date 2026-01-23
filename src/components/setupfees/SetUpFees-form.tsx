@@ -6,7 +6,7 @@ import ModalConfirmBtns from "../common/ModalConfirmBtns";
 import { cn } from "../../lib/utils";
 import InputField from "../forms/InputField";
 import DropDownDataField from "../forms/DropDownField";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Skeleton } from "../ui/skeleton";
 import { useMutation } from "@apollo/client";
 import {
@@ -164,16 +164,21 @@ export const SetUpFeesForm: React.FC<SetupFeesType> = ({
     { refetchQueries: [GET_ALL_INITIAL_FEES] }
   );
 
+  // ✅ FIX: Remove refetchQueries to prevent repeated refreshing
+  // The form state is managed locally, and we only refetch when main form is updated
   const [insertTimeFee] = useMutation(INSERT_TIME_BASED_FEE, {
-    refetchQueries: [GET_ALL_INITIAL_FEES],
+    // Removed refetchQueries to prevent repeated refreshing
+    // Data will be refetched when main updateFeeConfig is called
   });
 
   const [updateTimeFee] = useMutation(UPDATE_TIME_BASED_FEE, {
-    refetchQueries: [GET_ALL_INITIAL_FEES],
+    // Removed refetchQueries to prevent repeated refreshing
+    // Data will be refetched when main updateFeeConfig is called
   });
 
   const [deleteTimeFee] = useMutation(DELETE_TIME_BASED_FEE, {
-    refetchQueries: [GET_ALL_INITIAL_FEES],
+    // Removed refetchQueries to prevent repeated refreshing
+    // Data will be refetched when main updateFeeConfig is called
     onCompleted: () => {
       setIsDeleting(false);
       setDeletingId(null);
@@ -230,11 +235,63 @@ export const SetUpFeesForm: React.FC<SetupFeesType> = ({
     name: "time_based_fees",
   });
 
-  // Initialize original base fee ONLY ONCE
+  // Watch time-based fees to trigger sorting when values change
+  const watchedTimeBasedFees = form.watch("time_based_fees");
+
+  // ✅ FIX: Sort time-based fees by start_hour for display
+  // Use useMemo to prevent unnecessary recalculations and re-renders
+  const sortedFields = useMemo(() => {
+    if (fields.length <= 1) return fields;
+
+    // Get current form values for all time-based fees
+    const formValues = watchedTimeBasedFees || [];
+
+    // Create array with original index and start_hour for sorting
+    const fieldsWithTime = fields.map((field, originalIndex) => ({
+      field,
+      originalIndex,
+      startHour: formValues[originalIndex]?.start_hour || "00:00",
+    }));
+
+    // Sort by start_hour (time string comparison works for HH:MM format)
+    const sorted = [...fieldsWithTime].sort((a, b) => {
+      const timeA = a.startHour || "00:00";
+      const timeB = b.startHour || "00:00";
+      return timeA.localeCompare(timeB);
+    });
+
+    // Return sorted fields with their original indices
+    return sorted.map(({ field, originalIndex }) => ({
+      ...field,
+      originalIndex, // Store original index for form registration
+    }));
+  }, [fields, watchedTimeBasedFees]);
+
+  // Initialize original base fee when editData loads or changes
   useEffect(() => {
-    if (editData && originalBaseFee === 0) {
-      setOriginalBaseFee(editData.initial_fee || 0);
-      console.log("📌 Original Base Fee captured ONCE:", editData.initial_fee);
+    if (editData) {
+      // Calculate base fee by subtracting any active time-based fee
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      const currentTime = `${String(currentHour).padStart(2, "0")}:${String(currentMinute).padStart(2, "0")}`;
+      const formattedTimeBasedFees = editData.time_based_fees?.map((fee) => ({
+        ...fee,
+        start_hour: formatTimeForInput(fee.start_hour),
+        end_hour: formatTimeForInput(fee.end_hour),
+      })) || [];
+      const activeTimeFee = getApplicableTimeFee(currentTime, formattedTimeBasedFees);
+      const baseFee = (editData.initial_fee || 0) - activeTimeFee;
+
+      // Only update if originalBaseFee is 0 (initial load) or if editData.initial_fee changed significantly
+      if (originalBaseFee === 0 || Math.abs(originalBaseFee - baseFee) > 0.01) {
+        setOriginalBaseFee(baseFee);
+        console.log("📌 Original Base Fee updated:", {
+          initial_fee: editData.initial_fee,
+          activeTimeFee: activeTimeFee,
+          calculatedBaseFee: baseFee
+        });
+      }
     }
   }, [editData]);
 
@@ -286,10 +343,10 @@ export const SetUpFeesForm: React.FC<SetupFeesType> = ({
 
             form.setValue("initial_fee", newFee, { shouldDirty: true });
             setIsAutoSubmitting(true);
-            
+
             const currentFormValues = form.getValues();
             await handleUpdate(currentFormValues);
-            
+
             setIsAutoSubmitting(false);
 
             setLastSavedFee(newFee);
@@ -319,10 +376,10 @@ export const SetUpFeesForm: React.FC<SetupFeesType> = ({
 
             form.setValue("initial_fee", resetFee, { shouldDirty: true });
             setIsAutoSubmitting(true);
-            
+
             const currentFormValues = form.getValues();
             await handleUpdate(currentFormValues);
-            
+
             setIsAutoSubmitting(false);
 
             setLastSavedFee(resetFee);
@@ -339,7 +396,23 @@ export const SetUpFeesForm: React.FC<SetupFeesType> = ({
       const timeFee = getApplicableTimeFee(currentTime, formattedTimeBasedFees);
       const totalFee = originalBaseFee + timeFee;
       setCurrentFee(totalFee);
-      form.setValue("initial_fee", totalFee, { shouldDirty: false });
+
+      // ✅ FIX: Only update form value if it matches the calculated total (user hasn't manually changed it)
+      // This prevents overwriting user's manually set values
+      const currentFormValue = form.getValues("initial_fee") || 0;
+      const isManuallyChanged = Math.abs(currentFormValue - totalFee) > 0.01; // Allow small floating point differences
+
+      // Only auto-update if user hasn't manually changed the value
+      // OR if we're in auto-submit mode (time slot start/end)
+      if (!isManuallyChanged || isAutoSubmitting) {
+        form.setValue("initial_fee", totalFee, { shouldDirty: false });
+      } else {
+        // User manually changed it - don't overwrite, but still update display
+        console.log("⚠️ Form value manually changed, not overwriting:", {
+          formValue: currentFormValue,
+          calculatedTotal: totalFee
+        });
+      }
 
       //  DEBUG: Log active slots
       const activeSlots = formattedTimeBasedFees
@@ -416,54 +489,117 @@ export const SetUpFeesForm: React.FC<SetupFeesType> = ({
         timestamp: new Date().toISOString(),
       });
 
+      // ✅ FIX: Process time-based fees BEFORE updating main config
+      // This ensures all updates happen before the refetch, making it smoother
+      const allTimeBasedFees = form.getValues("time_based_fees") || [];
+      const timeFeeUpdates: Promise<unknown>[] = [];
+
+      console.log("📋 Processing time-based fees:", {
+        count: allTimeBasedFees.length,
+        fees: allTimeBasedFees
+      });
+
+      if (allTimeBasedFees.length > 0) {
+        for (let index = 0; index < allTimeBasedFees.length; index++) {
+          // Get fee from form values (latest user input)
+          const fee = allTimeBasedFees[index];
+          if (!fee) continue;
+          if (fee.isDeleted) continue;
+
+          console.log(`Processing time-based fee ${index}:`, {
+            id: fee.id,
+            isNew: fee.isNew,
+            start_hour: fee.start_hour,
+            end_hour: fee.end_hour,
+            fee: fee.fee
+          });
+
+          if (fee.id && !fee.isNew) {
+            // Update existing time-based fee - batch the promise
+            console.log(`Updating time-based fee ${index} (id: ${fee.id})`);
+            timeFeeUpdates.push(
+              updateTimeFee({
+                variables: {
+                  id: fee.id,
+                  start_hour: toTimeTZ(fee.start_hour),
+                  end_hour: toTimeTZ(fee.end_hour),
+                  fee: fee.fee,
+                },
+              }).then(() => {
+                console.log(`✅ Updated time-based fee ${index}`);
+              })
+            );
+          } else if (!fee.id || fee.isNew) {
+            // Insert new time-based fee - batch the promise
+            console.log(`Inserting new time-based fee ${index}`);
+            timeFeeUpdates.push(
+              insertTimeFee({
+                variables: {
+                  fee_config_id: editData?.id,
+                  start_hour: toTimeTZ(fee.start_hour),
+                  end_hour: toTimeTZ(fee.end_hour),
+                  fee: fee.fee,
+                },
+              }).then((res) => {
+                const newId = res?.data?.insertTimeBasedFee?.id;
+                if (newId) {
+                  form.setValue(`time_based_fees.${index}.id`, newId, {
+                    shouldDirty: false,
+                  });
+                  form.setValue(`time_based_fees.${index}.isNew`, false, {
+                    shouldDirty: false,
+                  });
+                  console.log(`✅ Inserted new time-based fee ${index} (id: ${newId})`);
+                }
+                return res;
+              })
+            );
+          }
+        }
+      } else {
+        console.log("No time-based fees to process");
+      }
+
+      // ✅ FIX: Wait for all time-based fee updates to complete before updating main config
+      // This ensures only ONE refetch happens at the end, making it smooth
+      if (timeFeeUpdates.length > 0) {
+        await Promise.all(timeFeeUpdates);
+        console.log("✅ All time-based fees updated");
+      }
+
+      // Now update main config (this will trigger ONE refetch at the end)
       await updateFeeConfig({
-        variables: { 
-          ...data, 
-          id: editData?.id, 
-          initial_fee: totalFeeToSave 
+        variables: {
+          ...data,
+          id: editData?.id,
+          initial_fee: totalFeeToSave
         },
       });
 
-      console.log(" Database updated successfully: initial_fee =", totalFeeToSave);
+      console.log("✅ Database updated successfully: initial_fee =", totalFeeToSave);
 
-      if (data.time_based_fees?.length) {
-        for (let index = 0; index < data.time_based_fees.length; index++) {
-          const fee = form.getValues(`time_based_fees.${index}`) || data.time_based_fees[index];
-          if (!fee) continue; 
-          if (fee.isDeleted) continue;
+      // ✅ FIX: Update originalBaseFee when user manually saves a new initial_fee
+      // Calculate the base fee by subtracting any active time-based fee
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      const currentTime = `${String(currentHour).padStart(2, "0")}:${String(currentMinute).padStart(2, "0")}`;
+      const formattedTimeBasedFees = editData?.time_based_fees?.map((fee) => ({
+        ...fee,
+        start_hour: formatTimeForInput(fee.start_hour),
+        end_hour: formatTimeForInput(fee.end_hour),
+      })) || [];
+      const activeTimeFee = getApplicableTimeFee(currentTime, formattedTimeBasedFees);
+      const newBaseFee = totalFeeToSave - activeTimeFee;
 
-          if (fee.id && !fee.isNew) {
-            await updateTimeFee({
-              variables: {
-                id: fee.id,
-                start_hour: toTimeTZ(fee.start_hour),
-                end_hour: toTimeTZ(fee.end_hour),
-                fee: fee.fee,
-              },
-            });
-          } else if (!fee.id || fee.isNew) {
-            const res = await insertTimeFee({
-              variables: {
-                fee_config_id: editData?.id,
-                start_hour: toTimeTZ(fee.start_hour),
-                end_hour: toTimeTZ(fee.end_hour),
-                fee: fee.fee,
-              },
-            });
+      console.log("🔄 Updating originalBaseFee:", {
+        savedTotal: totalFeeToSave,
+        activeTimeFee: activeTimeFee,
+        newBaseFee: newBaseFee,
+        oldBaseFee: originalBaseFee
+      });
 
-            const newId = res?.data?.insertTimeBasedFee?.id;
-            if (newId) {
-              form.setValue(`time_based_fees.${index}.id`, newId, {
-                shouldDirty: false,
-              });
-              form.setValue(`time_based_fees.${index}.isNew`, false, {
-                shouldDirty: false,
-              });
-            }
-          }
-        }
-      }
-
+      setOriginalBaseFee(newBaseFee);
       setLastSavedFee(totalFeeToSave);
       form.reset({ ...data, initial_fee: totalFeeToSave });
     } catch (error) {
@@ -609,21 +745,23 @@ export const SetUpFeesForm: React.FC<SetupFeesType> = ({
               <label className="font-semibold mb-2 block">
                 Time-Based Fees
               </label>
-              {fields.map((item, index) => {
+              {sortedFields.map((item, displayIndex) => {
+                // Use originalIndex for form registration to maintain correct form state
+                const originalIndex = (item as any).originalIndex ?? displayIndex;
                 const feeId = form.watch(
-                  `time_based_fees.${index}.id` as any
+                  `time_based_fees.${originalIndex}.id` as any
                 );
                 const isDeletingThis = isDeleting && deletingId === feeId;
 
                 return (
                   <div
-                    key={item.id || index}
+                    key={item.id || `time-slot-${originalIndex}`}
                     className="flex gap-2 mb-2 items-center"
                   >
                     <input
                       type="time"
                       {...form.register(
-                        `time_based_fees.${index}.start_hour` as any
+                        `time_based_fees.${originalIndex}.start_hour` as any
                       )}
                       placeholder="Start Hour"
                       className="h-[40px] md:h-[44px] w-1/5 border rounded px-2"
@@ -631,7 +769,7 @@ export const SetUpFeesForm: React.FC<SetupFeesType> = ({
                     <input
                       type="time"
                       {...form.register(
-                        `time_based_fees.${index}.end_hour` as any
+                        `time_based_fees.${originalIndex}.end_hour` as any
                       )}
                       placeholder="End Hour"
                       className="h-[40px] md:h-[44px] w-1/5 border rounded px-2"
@@ -639,7 +777,7 @@ export const SetUpFeesForm: React.FC<SetupFeesType> = ({
                     <input
                       type="number"
                       {...form.register(
-                        `time_based_fees.${index}.fee` as any
+                        `time_based_fees.${originalIndex}.fee` as any
                       )}
                       placeholder="Fee"
                       className="h-[40px] md:h-[44px] w-1/5 border rounded px-2"
@@ -647,7 +785,7 @@ export const SetUpFeesForm: React.FC<SetupFeesType> = ({
                     <button
                       type="button"
                       className="bg-red-500 text-white px-3 py-2 rounded disabled:bg-gray-400 disabled:cursor-not-allowed"
-                      onClick={() => handleDeleteTimeFee(index)}
+                      onClick={() => handleDeleteTimeFee(originalIndex)}
                       disabled={isDeletingThis}
                     >
                       {isDeletingThis ? "Deleting..." : "Remove"}
@@ -669,7 +807,7 @@ export const SetUpFeesForm: React.FC<SetupFeesType> = ({
               width="w-[100px] rounded-md"
               isLoading={updateLoading}
               editMode={true}
-              toggle={() => {}}
+              toggle={() => { }}
             />
           </form>
         </Form>
