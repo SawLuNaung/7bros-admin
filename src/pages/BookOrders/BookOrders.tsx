@@ -1,5 +1,5 @@
 import { ComingSoon } from "../../components/common/ComingSoon";
 
-export const Notification = () => {
+export const BookOrders = () => {
   return <ComingSoon title="Coming Soon" />;
 };
