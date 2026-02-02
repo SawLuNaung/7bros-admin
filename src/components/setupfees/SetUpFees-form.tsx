@@ -480,11 +480,17 @@ export const SetUpFeesForm: React.FC<SetupFeesType> = ({
 
   const handleUpdate = async (data: Fees) => {
     try {
+      if (!editData?.id) {
+        console.error("❌ Cannot update: No fee config ID found");
+        alert("Error: Fee configuration not found. Please refresh the page.");
+        return;
+      }
+
       const currentFormValues = form.getValues();
       const totalFeeToSave = currentFormValues.initial_fee || 0;
 
       console.log("📡 Saving initial_fee directly from form:", {
-        id: editData?.id,
+        id: editData.id,
         savedFee: totalFeeToSave,
         timestamp: new Date().toISOString(),
       });
